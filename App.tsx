@@ -44,7 +44,12 @@ import {
 import { createId } from './src/lib/ids';
 import type { CalloffEvent, ParseResult, Profile, Shift, ShiftCandidate, ShiftStatus } from './src/types';
 import { exportShiftToCalendar } from './src/services/calendar';
-import { ensureNotificationAccess, scheduleShiftReminder, cancelShiftReminder } from './src/services/notifications';
+import {
+  addShiftReminderResponseListener,
+  ensureNotificationAccess,
+  scheduleShiftReminder,
+  cancelShiftReminder,
+} from './src/services/notifications';
 import { clearLocalData, loadCalloffEvents, loadProfile, loadShifts, saveCalloffEvents, saveProfile, saveShifts } from './src/services/storage';
 import { signInOrCreateAccount, supabase } from './src/services/supabase';
 import { parsePastedScheduleText, parsePickedSchedule } from './src/services/uploads';
@@ -129,6 +134,32 @@ export default function App() {
 
     hydrate();
   }, []);
+
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
+    const subscription = addShiftReminderResponseListener(async ({ shiftId, action }) => {
+      setActiveTab('schedule');
+      const shift = shifts.find((item) => item.id === shiftId);
+      if (!shift) {
+        return;
+      }
+
+      if (action === 'going') {
+        await updateShiftStatus(shift.id, 'going');
+        Alert.alert('Reminder', 'Marked this shift as going.');
+        return;
+      }
+
+      if (action === 'call_off') {
+        await startAutomatedCallOff(shift);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [isReady, shifts, profile, calloffs]);
 
   const upcomingShifts = useMemo(
     () =>

@@ -13,7 +13,7 @@ ShiftReady is an Expo React Native app for nurses and shift workers. It supports
 - Reset Demo action that clears saved local profile, shifts, and call-off logs.
 - Confirm-before-save review for detected shifts, including editable title, unit, role, date, start/end times, notes, and day/evening/night presets.
 - Manual shift creation, schedule list, status changes, deletion, and call-off log.
-- 4-hour local mobile reminders with `expo-notifications`.
+- 4-hour local mobile reminders with `expo-notifications`, including Going and Call Off notification actions.
 - Optional device calendar export with `expo-calendar`.
 - Tap-to-call call-off workflow using the device dialer.
 - Optional Twilio-backed automatic call-off calls to the saved office number.
@@ -88,6 +88,28 @@ supabase secrets set TWILIO_FROM_NUMBER=...
 The parser function refuses to invent demo shifts until the Document AI file-to-OCR exchange is enabled with Google service account credentials.
 The automatic call-off function places an outbound Twilio call to the saved call-off number and reads a short ShiftReady message for the selected shift. The call-off phone number should be stored in E.164 format, for example `+15551234567`.
 
+## Automatic Office Calls
+
+The app already has the call-off flow wired in:
+
+- In the app, add the workplace call-off number in Settings.
+- On a shift card, Auto Call asks the Supabase Edge Function to place the Twilio call.
+- On mobile, the reminder notification includes Going and Call Off actions. Call Off opens the app and runs the same Auto Call flow.
+- If Supabase or Twilio is not configured, Call Off falls back to the device dialer so the user can still call manually.
+
+To make automatic calls work in your own account:
+
+1. Create a Twilio account.
+2. Get your Twilio Account SID and Auth Token from the Twilio Console.
+3. Buy or verify a Twilio phone number that is allowed to place outbound voice calls.
+4. Create a Supabase project for the app.
+5. Run `supabase db push`.
+6. Deploy `place-calloff-call` with `supabase functions deploy place-calloff-call`.
+7. Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` with `supabase secrets set`.
+8. Put your Supabase URL and anon key into `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+9. Rebuild and redeploy the app.
+10. Test with a number you control before using a real office call-off line.
+
 ## Mobile Builds
 
 ```sh
@@ -96,10 +118,11 @@ npx eas submit --platform all
 ```
 
 Use TestFlight and Google Play internal testing before public release.
+GitHub Pages is only the web preview. Mobile notification action buttons and the direct phone dialer flow must be tested in an iOS or Android build.
 
 ## Production Notes
 
 - Raw schedule uploads are private and expire after 24 hours unless confirmed.
 - Full team rosters should be parsed down to the current user’s shifts only.
 - Uploads that appear to include patient information are blocked before saving.
-- Automated portal login, auto-shift claiming, and automated call-off calls are intentionally out of scope for v1.
+- Automated portal login and auto-shift claiming are intentionally out of scope for v1.
