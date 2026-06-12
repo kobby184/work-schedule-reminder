@@ -16,6 +16,7 @@ ShiftReady is an Expo React Native app for nurses and shift workers. It supports
 - 4-hour local mobile reminders with `expo-notifications`.
 - Optional device calendar export with `expo-calendar`.
 - Tap-to-call call-off workflow using the device dialer.
+- Optional Twilio-backed automatic call-off calls to the saved office number.
 - Supabase schema, RLS policies, private upload bucket, and Edge Function scaffolding.
 
 ## Local Development
@@ -52,6 +53,7 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=
 ```
 
 Without those values, the app runs in local mode using device storage. In the web preview, uploaded images are read with a browser OCR fallback. PDFs and mobile OCR still require the Supabase/Document AI backend.
+Automatic office calls also require Supabase plus Twilio Edge Function secrets. The browser app never stores Twilio credentials.
 
 ## Supabase Deployment
 
@@ -68,6 +70,7 @@ supabase db push
 supabase functions deploy parse-shift-upload
 supabase functions deploy confirm-shifts
 supabase functions deploy cleanup-expired-uploads
+supabase functions deploy place-calloff-call
 ```
 
 4. Set Edge Function secrets:
@@ -77,9 +80,13 @@ supabase secrets set GOOGLE_DOCUMENT_AI_PROCESS_URL=...
 supabase secrets set GOOGLE_SERVICE_ACCOUNT_EMAIL=...
 supabase secrets set GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=...
 supabase secrets set CLEANUP_JOB_SECRET=...
+supabase secrets set TWILIO_ACCOUNT_SID=...
+supabase secrets set TWILIO_AUTH_TOKEN=...
+supabase secrets set TWILIO_FROM_NUMBER=...
 ```
 
 The parser function refuses to invent demo shifts until the Document AI file-to-OCR exchange is enabled with Google service account credentials.
+The automatic call-off function places an outbound Twilio call to the saved call-off number and reads a short ShiftReady message for the selected shift. The call-off phone number should be stored in E.164 format, for example `+15551234567`.
 
 ## Mobile Builds
 

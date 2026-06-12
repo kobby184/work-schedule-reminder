@@ -24,6 +24,7 @@ import {
   LogIn,
   Pencil,
   Phone,
+  PhoneCall,
   Plus,
   ShieldCheck,
   Trash2,
@@ -47,6 +48,7 @@ import { ensureNotificationAccess, scheduleShiftReminder, cancelShiftReminder } 
 import { clearLocalData, loadCalloffEvents, loadProfile, loadShifts, saveCalloffEvents, saveProfile, saveShifts } from './src/services/storage';
 import { signInOrCreateAccount, supabase } from './src/services/supabase';
 import { parsePastedScheduleText, parsePickedSchedule } from './src/services/uploads';
+import { placeAutomatedCalloffCall } from './src/services/calloff';
 
 const colors = {
   background: '#F7FAFA',
@@ -106,6 +108,7 @@ export default function App() {
   const [reviewCandidates, setReviewCandidates] = useState<ShiftCandidate[]>([]);
   const [pastedText, setPastedText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
+  const [callingShiftId, setCallingShiftId] = useState<string | null>(null);
   const [manualDraft, setManualDraft] = useState(createManualDraft());
 
   useEffect(() => {
@@ -199,6 +202,7 @@ export default function App() {
     setCalloffs([]);
     setManualDraft(createManualDraft());
     setPastedText('');
+    setCallingShiftId(null);
     clearParseResult();
     setAccountEmail('');
     setAccountPassword('');
@@ -369,7 +373,9 @@ export default function App() {
       id: createId('calloff'),
       shiftId: shift.id,
       phoneNumber: profile.calloffPhone,
+      method: 'dialer',
       status: 'started',
+      message: 'Opened phone dialer for manual call-off.',
       createdAt: new Date().toISOString(),
     };
     await persistCalloffs([event, ...calloffs]);
@@ -380,6 +386,53 @@ export default function App() {
       await Linking.openURL(phoneUrl);
     } else {
       Alert.alert('Call off', `Call ${profile.calloffPhone}`);
+    }
+  }
+
+  async function startAutomatedCallOff(shift: Shift) {
+    if (!profile?.calloffPhone) {
+      Alert.alert('Auto call', 'Add a workplace call-off number in settings.');
+      setActiveTab('settings');
+      return;
+    }
+
+    if (!supabase) {
+      Alert.alert('Auto call unavailable', 'Automatic office calls need Supabase and Twilio. Opening the phone dialer instead.');
+      await startCallOff(shift);
+      return;
+    }
+
+    setCallingShiftId(shift.id);
+    try {
+      const result = await placeAutomatedCalloffCall(shift, profile);
+      const event: CalloffEvent = {
+        id: createId('calloff'),
+        shiftId: shift.id,
+        phoneNumber: profile.calloffPhone,
+        method: 'automated',
+        status: 'started',
+        providerCallId: result.callSid,
+        message: result.message,
+        createdAt: new Date().toISOString(),
+      };
+      await persistCalloffs([event, ...calloffs]);
+      await updateShiftStatus(shift.id, 'called_off');
+      Alert.alert('Auto call', result.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Automatic office call failed.';
+      const event: CalloffEvent = {
+        id: createId('calloff'),
+        shiftId: shift.id,
+        phoneNumber: profile.calloffPhone,
+        method: 'automated',
+        status: 'failed',
+        message,
+        createdAt: new Date().toISOString(),
+      };
+      await persistCalloffs([event, ...calloffs]);
+      Alert.alert('Auto call failed', `${message} Use Dial to call manually.`);
+    } finally {
+      setCallingShiftId(null);
     }
   }
 
@@ -461,6 +514,8 @@ export default function App() {
               onResyncReminders={resyncReminders}
               onGoing={updateShiftStatus}
               onCallOff={startCallOff}
+              onAutoCallOff={startAutomatedCallOff}
+              callingShiftId={callingShiftId}
             />
           )}
 
@@ -489,6 +544,8 @@ export default function App() {
               onAddManual={addManualShift}
               onStatus={updateShiftStatus}
               onCallOff={startCallOff}
+              onAutoCallOff={startAutomatedCallOff}
+              callingShiftId={callingShiftId}
               onDelete={deleteShift}
               onCalendarExport={handleCalendarExport}
               onCompleteCalloff={completeCalloff}
@@ -533,6 +590,8 @@ function HomeScreen({
   onResyncReminders,
   onGoing,
   onCallOff,
+  onAutoCallOff,
+  callingShiftId,
 }: {
   nextShift?: Shift;
   upcomingCount: number;
@@ -544,6 +603,8 @@ function HomeScreen({
   onResyncReminders: () => void;
   onGoing: (shiftId: string, status: ShiftStatus) => void;
   onCallOff: (shift: Shift) => void;
+  onAutoCallOff: (shift: Shift) => void;
+  callingShiftId: string | null;
 }) {
   return (
     <View style={styles.stack}>
@@ -560,8 +621,10 @@ function HomeScreen({
             shift={nextShift}
             onStatus={onGoing}
             onCallOff={onCallOff}
+            onAutoCallOff={onAutoCallOff}
             onDelete={() => undefined}
             onCalendarExport={() => undefined}
+            isAutoCalling={callingShiftId === nextShift.id}
             compact
           />
         ) : (
@@ -676,6 +739,8 @@ function ScheduleScreen({
   onAddManual,
   onStatus,
   onCallOff,
+  onAutoCallOff,
+  callingShiftId,
   onDelete,
   onCalendarExport,
   onCompleteCalloff,
@@ -687,6 +752,8 @@ function ScheduleScreen({
   onAddManual: () => void;
   onStatus: (shiftId: string, status: ShiftStatus) => void;
   onCallOff: (shift: Shift) => void;
+  onAutoCallOff: (shift: Shift) => void;
+  callingShiftId: string | null;
   onDelete: (shift: Shift) => void;
   onCalendarExport: (shift: Shift) => void;
   onCompleteCalloff: (eventId: string) => void;
@@ -716,8 +783,10 @@ function ScheduleScreen({
               shift={shift}
               onStatus={onStatus}
               onCallOff={onCallOff}
+              onAutoCallOff={onAutoCallOff}
               onDelete={onDelete}
               onCalendarExport={onCalendarExport}
+              isAutoCalling={callingShiftId === shift.id}
             />
           ))
         ) : (
@@ -732,12 +801,16 @@ function ScheduleScreen({
             <View key={event.id} style={styles.calloffRow}>
               <View style={styles.fill}>
                 <Text style={styles.cardTitle}>{event.phoneNumber}</Text>
-                <Text style={styles.mutedText}>{formatDateTime(event.createdAt)}</Text>
+                <Text style={styles.mutedText}>
+                  {(event.method === 'automated' ? 'Auto call' : 'Dialer')} · {formatDateTime(event.createdAt)}
+                </Text>
+                {event.providerCallId ? <Text style={styles.statusText}>Call ID {event.providerCallId}</Text> : null}
+                {event.message ? <Text style={styles.statusText}>{event.message}</Text> : null}
               </View>
               {event.status === 'started' ? (
                 <PrimaryButton icon={Check} label="Done" onPress={() => onCompleteCalloff(event.id)} compact />
               ) : (
-                <StatusPill status="going" label="Completed" />
+                <StatusPill status={event.status === 'failed' ? 'missed' : 'going'} label={event.status === 'failed' ? 'Failed' : 'Completed'} />
               )}
             </View>
           ))}
@@ -821,15 +894,19 @@ function ShiftCard({
   shift,
   onStatus,
   onCallOff,
+  onAutoCallOff,
   onDelete,
   onCalendarExport,
+  isAutoCalling = false,
   compact = false,
 }: {
   shift: Shift;
   onStatus: (shiftId: string, status: ShiftStatus) => void;
   onCallOff: (shift: Shift) => void;
+  onAutoCallOff: (shift: Shift) => void;
   onDelete: (shift: Shift) => void;
   onCalendarExport: (shift: Shift) => void;
+  isAutoCalling?: boolean;
   compact?: boolean;
 }) {
   const hours = hoursUntil(shift.startAt);
@@ -847,7 +924,8 @@ function ShiftCard({
       {shift.confidence ? <Text style={styles.statusText}>OCR confidence {Math.round(shift.confidence * 100)}%</Text> : null}
       <View style={styles.buttonWrap}>
         <SmallButton icon={Check} label="Going" onPress={() => onStatus(shift.id, 'going')} />
-        <SmallButton icon={Phone} label="Call Off" onPress={() => onCallOff(shift)} danger />
+        <SmallButton icon={PhoneCall} label={isAutoCalling ? 'Calling...' : 'Auto Call'} onPress={() => onAutoCallOff(shift)} disabled={isAutoCalling} danger />
+        <SmallButton icon={Phone} label="Dial" onPress={() => onCallOff(shift)} danger />
         {!compact && <SmallButton icon={CalendarDays} label={shift.calendarEventId ? 'Exported' : 'Calendar'} onPress={() => onCalendarExport(shift)} />}
         {!compact && <SmallButton icon={Trash2} label="Delete" onPress={() => onDelete(shift)} muted />}
       </View>
@@ -1029,16 +1107,18 @@ function SmallButton({
   onPress,
   danger,
   muted,
+  disabled,
 }: {
   icon: Icon;
   label: string;
   onPress: () => void;
   danger?: boolean;
   muted?: boolean;
+  disabled?: boolean;
 }) {
-  const color = danger ? colors.red : muted ? colors.muted : colors.primary;
+  const color = disabled ? colors.muted : danger ? colors.red : muted ? colors.muted : colors.primary;
   return (
-    <Pressable style={({ pressed }) => [styles.smallButton, pressed && styles.pressed]} onPress={onPress}>
+    <Pressable style={({ pressed }) => [styles.smallButton, disabled && styles.disabledButton, pressed && !disabled && styles.pressed]} onPress={disabled ? undefined : onPress}>
       <IconComponent size={15} color={color} strokeWidth={2.4} />
       <Text style={[styles.smallButtonText, { color }]}>{label}</Text>
     </Pressable>

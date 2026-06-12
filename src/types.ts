@@ -45,7 +45,10 @@ export type CalloffEvent = {
   id: string;
   shiftId: string;
   phoneNumber: string;
+  method?: 'dialer' | 'automated';
   status: 'started' | 'completed' | 'failed' | 'cancelled';
+  providerCallId?: string;
+  message?: string;
   createdAt: string;
   completedAt?: string;
 };
