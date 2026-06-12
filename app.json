@@ -1,25 +1,67 @@
 {
   "expo": {
-    "name": "work-schedule-reminder",
+    "name": "ShiftReady",
     "slug": "work-schedule-reminder",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "scheme": "shiftready",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.shiftready.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "ShiftReady lets you choose schedule photos so it can detect your upcoming shifts.",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "ShiftReady can add confirmed work shifts to your calendar when you ask it to.",
+        "NSCalendarsUsageDescription": "ShiftReady can add confirmed work shifts to your calendar when you ask it to."
+      }
     },
     "android": {
+      "package": "com.shiftready.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "READ_CALENDAR",
+        "WRITE_CALENDAR"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "experiments": {
+      "baseUrl": "."
+    },
+    "plugins": [
+      "expo-notifications",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "ShiftReady can add confirmed work shifts to your calendar when you ask it to.",
+          "writeOnlyCalendarPermission": "ShiftReady can add confirmed work shifts to your calendar when you ask it to."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ShiftReady lets you choose schedule photos so it can detect your upcoming shifts."
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ]
+    ],
+    "extra": {
+      "supabaseUrl": "",
+      "supabaseAnonKey": ""
     }
   }
 }

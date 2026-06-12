@@ -3,10 +3,23 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "^2.108.1",
     "expo": "~56.0.11",
+    "expo-calendar": "~56.0.8",
+    "expo-document-picker": "~56.0.4",
+    "expo-file-system": "~56.0.8",
+    "expo-image-picker": "~56.0.17",
+    "expo-notifications": "~56.0.17",
     "expo-status-bar": "~56.0.4",
+    "lucide-react-native": "^1.17.0",
     "react": "19.2.3",
-    "react-native": "0.85.3"
+    "react-dom": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-svg": "15.15.4",
+    "react-native-url-polyfill": "^3.0.0",
+    "react-native-web": "^0.21.2",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
@@ -16,7 +29,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:web": "expo export --platform web",
+    "typecheck": "node --stack_size=8192 node_modules/typescript/bin/tsc --noEmit"
   },
   "private": true
 }

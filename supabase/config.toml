@@ -1,0 +1,10 @@
+project_id = "shiftready"
+
+[functions.parse-shift-upload]
+verify_jwt = true
+
+[functions.confirm-shifts]
+verify_jwt = true
+
+[functions.cleanup-expired-uploads]
+verify_jwt = false
